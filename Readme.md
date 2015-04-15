@@ -1,0 +1,2 @@
+# ansible-fuel playbook
+WIP

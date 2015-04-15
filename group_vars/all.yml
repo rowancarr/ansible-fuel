@@ -1,0 +1,20 @@
+kvm:
+  server: qemu:///system
+
+mirantis:
+  url: "https://mirantis.akamaized.net/"
+  iso: "MirantisOpenStack-6.0.iso"
+  sha256sum: a11bc4b61f009b6af2ff5675eb4f499d9572b6c74946d119566ae8da6a330537
+
+fuel:
+  name: fuel-6.0-test
+  cpu: 2
+  ram: 512
+  disk_size: 30
+  disk_location: /mnt/data2
+  nics:
+    - virbr0
+  all_ext_management: 
+    ip: 192.168.1.5
+    mask: 255.255.255.0
+

@@ -7,10 +7,10 @@
     shell: "virsh list --all"
     register: is_vm_exists
 
-  - name: Getting mirantis openstack iso
+  - name: Downloading mirantis openstack iso
     get_url: "url={{ mirantis.url }}{{ mirantis.iso }}  dest=/tmp/{{ mirantis.iso }} sha256sum={{ mirantis.sha256sum }}"
 
-  - name: Create virtual machine
+  - name: Creating new virtual machine
     shell: |
       virt-install --connect {{ kvm.server }} \
         --virt-type kvm \
@@ -20,42 +20,32 @@
         --disk {{ fuel.disk_location }}/{{ fuel.name }}.qcow2,size={{ fuel.disk_size }} \
         --os-type linux \
         --graphics vnc \
-        {% for nic in fuel.nics -%} --network bridge={{ nic }},mac=RANDOM{%- endfor %} \
-        --autostart \
+        {% set delimiter=" " -%}{% for nic in fuel.nics -%} --network bridge={{ nic }},mac=RANDOM{{ delimiter }}{%- endfor %} --autostart \
         --cdrom /tmp/{{ mirantis.iso }}
     when: |
-      not is_vm_exists.stdout.find( "{{ fuel.name }}" )
+      is_vm_exists.stdout.find( "{{ fuel.name }}" ) == -1
 
-  - name: Wait until vm stops
+  - name: Waiting for new vm to complete initial install
     shell: virsh list --inactive
     register: result
     until: |
-      result.stdout.find("{{ fuel.name }}")
-    retries: 12
-    delay: 5
+      result.stdout.find("{{ fuel.name }}") != -1
+    retries: 100
+    delay: 10
+
+  - name: Adding addition network device as we dont yet have ssh access
+    template: "src=../templates/fuel_ifcfg-eth1.j2 dest=/tmp/ifcfg-eth1"
+
+  - name: Adding addition network device as we dont yet have ssh access
+    template: "src=../templates/network.j2 dest=/tmp/network"
+
+  - shell: |
+      virt-copy-in -d {{ fuel.name }} /tmp/ifcfg-eth1 /etc/sysconfig/network-scripts
   
-  - name: make sure guestmount is installed
-    sudo: true
-    yum: name=libguestfs-tools state=latest
-
-  - name: create mount directory 
-    file: |
-      path=/mnt/"{{ fuel.name }}" state=directory
-  
-  - stat: "path=/mnt/{{ fuel.name }}/etc/"
-    register: is_mounted
-
-  - name: mount qcow2 image
-    shell: |
-      guestmount -d "{{ fuel.name }}" -i /mnt/"{{ fuel.name }}"
-    when: is_mounted.stat.exists == False
-
-  - name: add new network device
-    template: "src=../templates/fuel_ifcfg-eth1.j2 dest=/mnt/{{ fuel.name }}/etc/sysconfig/network-scripts/ifcfg-eth1"
-
-  - name: unmount vm
-    shell: "umount /mnt/{{ fuel.name }}"
+  - shell: |
+      virt-copy-in -d {{ fuel.name }} /tmp/network /etc/sysconfig
 
   - name: start vm
-    shell: virsh start "{{ fuel.name }}"
+    shell: |
+      virsh start {{ fuel.name }}
 
